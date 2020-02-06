@@ -5,7 +5,7 @@ import sys
 import json
 
 
-def proof_of_work(block):
+def proof_of_work(last_block):
     """
     Simple Proof of Work Algorithm
     Stringify the block and look for a proof.
@@ -13,7 +13,7 @@ def proof_of_work(block):
     in an effort to find a number that is a valid proof
     :return: A valid proof for the provided block
     """
-    block_string = json.dumps(block, sort_keys=True)
+    block_string = json.dumps(last_block, sort_keys=True)
     proof = 0
 
     while valid_proof(block_string, proof) is False:
@@ -52,6 +52,8 @@ if __name__ == '__main__':
     print("ID is", id)
     f.close()
 
+    coins_mined = 0
+
     # Run forever until interrupted
     while True:
         # gets the last proof stored in the last block from the server
@@ -74,15 +76,20 @@ if __name__ == '__main__':
         post_data = {"proof": new_proof, "id": id}
 
         r = requests.post(url=node + "/mine", json=post_data)
-        data = r.json()
 
-        coins_mined = 0
+        try:
+            data = r.json()
+        except ValueError:
+            print("Error:  Non-json response")
+            print("Response returned:")
+            print(r)
+            break
 
         # TODO: If the server responds with a 'message' 'New Block Forged'
         # add 1 to the number of coins mined and print it.  Otherwise,
         # print the message from the server.
         if data.get('message') == 'New Block Mined':
             coins_mined += 1
-            print("Total coins mined: ", str(coins_mined))
+            print(f'You have mined {coins_mined} coins')
         else:
             print(data.get('message'))
