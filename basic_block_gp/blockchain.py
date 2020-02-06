@@ -125,14 +125,21 @@ blockchain = Blockchain()
 @app.route('/mine', methods=['GET'])
 def mine():
     # Run the proof of work algorithm to get the next proof
+    proof = blockchain.proof_of_work()
 
     # Forge the new Block by adding it to the chain with the proof
+    previous_hash = blockchain.hash(blockchain.last_block)
+    block = blockchain.new_block(proof, previous_hash)
 
     response = {
-        # TODO: Send a JSON response with the new block
+        'message': "New Block Mined",
+        'index': block['index'],
+        'transactions': block['transactions'],
+        'proof': block['proof'],
+        'previous_hash': block['previous_hash'],
     }
 
-    return jsonify(response),
+    return jsonify(response), 200
 
 
 @app.route('/chain', methods=['GET'])
