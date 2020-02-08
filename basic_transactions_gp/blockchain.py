@@ -141,6 +141,11 @@ def mine():
         previous_hash = blockchain.hash(last_block)
         block = blockchain.new_block(submitted_proof, previous_hash)
 
+        # Give a reward for finding a proof
+        # Sender: 0 denotes this node has mined a new block
+        blockchain.new_transaction(
+            sender="0", recipient=node_identifier, amount=1)
+
         response = {
             'message': "New Block Mined",
             'index': block['index'],
