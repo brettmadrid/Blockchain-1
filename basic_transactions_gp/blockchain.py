@@ -78,9 +78,9 @@ class Blockchain(object):
         # Return the hashed block string in hexadecimal format
         return hashlib.sha3_256(block_string).hexdigest()
 
-    @property
-    def last_block(self):
-        return self.chain[-1]
+    # @property
+    # def last_block(self):
+    #     return self.chain[-1]
 
     @staticmethod
     def valid_proof(block_string, proof):
@@ -172,6 +172,31 @@ def full_chain():
     }
 
     return jsonify(response), 200
+
+
+@app.route('/last_block', methods=['GET'])
+def last_block():
+    response = {
+        'last_block': blockchain.last_block
+    }
+    return jsonify(response), 200
+
+
+@app.route('/transactions/new', methods=['POST'])
+def new_transaction():
+    values = request.get_json()
+
+    # Validate post data
+    required = ['sender', 'recipient', 'amount']
+    if not all(i in values for i in required):
+        return 'Missing POST data values', 400
+
+    # Create new Transaction
+    index = blockchain.new_transaction(
+        values['sender'], values['recipient'], values['amount'])
+
+    response = {'message': f'Transaction added to Block {index}'}
+    return jsonify(response), 201
 
 
 # Run the program on port 5000
