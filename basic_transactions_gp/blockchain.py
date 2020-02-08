@@ -5,25 +5,20 @@ from uuid import uuid4
 
 from flask import Flask, jsonify, request
 
+import sys
+
 
 class Blockchain(object):
     def __init__(self):
         self.chain = []
         self.current_transactions = []
+        self.nodes = set()
 
-        # Create the genesis block
         self.new_block(previous_hash=1, proof=100)
 
     def new_block(self, proof, previous_hash=None):
         """
         Create a new Block in the Blockchain
-
-        A block should have:
-        * Index
-        * Timestamp
-        * List of current transactions
-        * The proof used to mine this block
-        * The hash of the previous block
 
         :param proof: <int> The proof given by the Proof of Work algorithm
         :param previous_hash: (Optional) <str> Hash of previous Block
@@ -31,7 +26,7 @@ class Blockchain(object):
         """
 
         block = {
-            "index": len(self.chain) + 1,
+            'index': len(self.chain) + 1,
             'timestamp': time(),
             'transactions': self.current_transactions,
             'proof': proof,
@@ -41,19 +36,17 @@ class Blockchain(object):
         # Reset the current list of transactions
         self.current_transactions = []
 
-        # Append the chain to the block
         self.chain.append(block)
-
-        # Return the new block
         return block
 
     def new_transaction(self, sender, recipient, amount):
         """
         Creates a new transaction to go into the next mined Block
-        :param sender: Address of the Recipient - String
-        :param recipient: Address of the Recipient - String
-        :param amount: Amount - Int
-        :return: The index of the new Block holding this transaction
+
+        :param sender: <str> Address of the Recipient
+        :param recipient: <str> Address of the Recipient
+        :param amount: <int> Amount
+        :return: <int> The index of the BLock that will hold this transaction
         """
 
         self.current_transactions.append({
@@ -64,7 +57,8 @@ class Blockchain(object):
 
         return self.last_block['index'] + 1
 
-    def hash(self, block):
+    @staticmethod
+    def hash(block):
         """
         Creates a SHA-256 hash of a Block
 
@@ -72,20 +66,40 @@ class Blockchain(object):
         "return": <str>
         """
 
-        # Create the block_string
-        block_string = json.dumps(block, sort_keys=True).encode()
+        # Two line version:
+        # block_string = json.dumps(block, sort_keys=True).encode()
+        # return hashlib.sha256(block_string).hexdigest()
 
-        # Return the hashed block string in hexadecimal format
-        return hashlib.sha3_256(block_string).hexdigest()
+        # Use json.dumps to convert json into a string
+        # Use hashlib.sha256 to create a hash
+        # It requires a `bytes-like` object, which is what
+        # .encode() does.
+        # It convertes the string to bytes.
+        # We must make sure that the Dictionary is Ordered,
+        # or we'll have inconsistent hashes
 
-    # @property
-    # def last_block(self):
-    #     return self.chain[-1]
+        string_object = json.dumps(block, sort_keys=True)
+        block_string = string_object.encode()
+
+        raw_hash = hashlib.sha256(block_string)
+        hex_hash = raw_hash.hexdigest()
+
+        # By itself, the sha256 function returns the hash in a raw string
+        # that will likely include escaped characters.
+        # This can be hard to read, but .hexdigest() converts the
+        # hash to a string of hexadecimal characters, which is
+        # easier to work with and understand
+
+        return hex_hash
+
+    @property
+    def last_block(self):
+        return self.chain[-1]
 
     @staticmethod
     def valid_proof(block_string, proof):
         """
-        Validates the Proof:  Does hash(block_string, proof) contain 3
+        Validates the Proof:  Does hash(block_string, proof) contain 6
         leading zeroes?  Return true if the proof is valid
         :param block_string: <string> The stringified block to use to
         check in combination with `proof`
@@ -95,8 +109,7 @@ class Blockchain(object):
         :return: True if the resulting hash is a valid proof, False otherwise
         """
         guess = f'{block_string}{proof}'.encode()
-        guess_hash = hashlib.sha3_256(guess).hexdigest()
-
+        guess_hash = hashlib.sha256(guess).hexdigest()
         return guess_hash[:6] == "000000"
 
 
@@ -110,57 +123,47 @@ node_identifier = str(uuid4()).replace('-', '')
 blockchain = Blockchain()
 
 
-@app.route('/last_block', methods=['GET'])
-def last_block():
-    last_block = blockchain.last_block
-    response = {
-        'last_block': last_block
-    }
-    return jsonify(response), 200
-
-
 @app.route('/mine', methods=['POST'])
 def mine():
-    # deal with non JSON response
+    # Handle Non-JSON response
     values = request.get_json()
-
-    # ensure required fields are in the POST data
+    # Check that the required fields are in the POST'ed data
     required = ['proof', 'id']
-    if not all(i in values for i in required):
-        response = {'message': "Incorrect or missing values"}
+    if not all(k in values for k in required):
+        response = {'message': "Missing Values"}
         return jsonify(response), 400
 
     submitted_proof = values.get('proof')
 
-    # is proof valid?
+    # Determine if proof is valid
     last_block = blockchain.last_block
-    last_block_string = json.dumps(last_block, sort_keys=True)
+    last_block_string = json.dumps(last_block, sort_keys=True).encode()
 
     if blockchain.valid_proof(last_block_string, submitted_proof):
-        # Forge the new Block by adding it to the chain with the proof
+        # Forge the new BLock by adding it to the chain
         previous_hash = blockchain.hash(last_block)
         block = blockchain.new_block(submitted_proof, previous_hash)
 
-        # Give a reward for finding a proof
-        # Sender: 0 denotes this node has mined a new block
+        # Give a reward for finding the proof.
+        # The sender is "0" to signify that this node has mine a new coin
         blockchain.new_transaction(
-            sender="0", recipient=node_identifier, amount=1)
+            sender="0",
+            recipient=node_identifier,
+            amount=1,
+        )
 
         response = {
-            'message': "New Block Mined",
+            'message': "New Block Forged",
             'index': block['index'],
             'transactions': block['transactions'],
             'proof': block['proof'],
             'previous_hash': block['previous_hash'],
         }
-
         return jsonify(response), 200
-
     else:
         response = {
-            'message': "Invalid or already submitted proof."
+            'message': "Proof was invalid or already submitted."
         }
-
         return jsonify(response), 200
 
 
@@ -168,9 +171,8 @@ def mine():
 def full_chain():
     response = {
         'length': len(blockchain.chain),
-        'chain': blockchain.chain
+        'chain': blockchain.chain,
     }
-
     return jsonify(response), 200
 
 
@@ -186,16 +188,17 @@ def last_block():
 def new_transaction():
     values = request.get_json()
 
-    # Validate post data
+    # Check that the required fields are in the POST'ed data
     required = ['sender', 'recipient', 'amount']
-    if not all(i in values for i in required):
-        return 'Missing POST data values', 400
+    if not all(k in values for k in required):
+        return 'Missing Values', 400
 
-    # Create new Transaction
-    index = blockchain.new_transaction(
-        values['sender'], values['recipient'], values['amount'])
+    # Create a new Transaction
+    index = blockchain.new_transaction(values['sender'],
+                                       values['recipient'],
+                                       values['amount'])
 
-    response = {'message': f'Transaction added to Block {index}'}
+    response = {'message': f'Transaction will be added to Block {index}'}
     return jsonify(response), 201
 
 
